@@ -2,11 +2,20 @@
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# Windowsのコンソールは既定でcp932等の非UTF-8コードページを使うため、
+# 動画タイトルに含まれる一部の文字（絵文字・中国語簡体字など）でprintが
+# UnicodeEncodeErrorを起こすことがある。全スクリプトの起点であるここで
+# stdout/stderrをUTF-8に強制し、表示不可能な文字は落とさず置換する。
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
 
 BASE_DIR = Path(__file__).resolve().parent
 
