@@ -9,9 +9,11 @@ import argparse
 import sys
 
 import config
+from combine_deck import combine_summaries
 from config import ConfigError
 from fetch_videos import QuotaExceededError, search_and_collect
 from generate_slides import generate as generate_slides_for
+from send_line import send_deck
 from summarize_to_md import summarize_video
 
 
@@ -20,6 +22,8 @@ def run_pipeline(
     max_results: int | None = None,
     slide_format: str | None = None,
     force: bool = False,
+    send_line: bool = False,
+    deck_title: str | None = None,
 ) -> list[dict]:
     print("=== 1. YouTube動画の検索・字幕取得 ===")
     try:
@@ -58,6 +62,23 @@ def run_pipeline(
     for r in results:
         print(f"  - {r['title']}\n      md: {r['markdown_path']}\n      slide: {r['slide_path']}")
 
+    if results:
+        print("\n=== 5. 統合デッキ生成（NotebookLM取り込み用） ===")
+        try:
+            deck_path = combine_summaries(
+                [r["video_id"] for r in results], title=deck_title
+            )
+        except Exception as e:  # noqa: BLE001
+            print(f"[main] 統合デッキ生成失敗: {e}", file=sys.stderr)
+            deck_path = None
+
+        if deck_path and send_line:
+            print("=== 6. LINE配信 ===")
+            try:
+                send_deck(deck_path)
+            except Exception as e:  # noqa: BLE001
+                print(f"[main] LINE配信失敗: {e}", file=sys.stderr)
+
     return results
 
 
@@ -67,6 +88,8 @@ def _main() -> None:
     parser.add_argument("--max-results", type=int, default=None, help=f"クエリあたり最大件数（既定: {config.YT_MAX_RESULTS}, 上限10）")
     parser.add_argument("--format", choices=["pptx", "html"], default=None, help=f"スライド形式（既定: {config.SLIDE_FORMAT}）")
     parser.add_argument("--force", action="store_true", help="キャッシュを無視して全段階を再実行")
+    parser.add_argument("--send-line", action="store_true", help="統合デッキをLINEへ配信する（既定はしない）")
+    parser.add_argument("--deck-title", default=None, help="統合デッキのタイトル")
     args = parser.parse_args()
 
     run_pipeline(
@@ -74,6 +97,8 @@ def _main() -> None:
         max_results=args.max_results,
         slide_format=args.format,
         force=args.force,
+        send_line=args.send_line,
+        deck_title=args.deck_title,
     )
 
 

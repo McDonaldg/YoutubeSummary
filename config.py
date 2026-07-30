@@ -46,6 +46,11 @@ LLM_MAX_CALLS_PER_VIDEO = int(os.getenv("LLM_MAX_CALLS_PER_VIDEO", "1"))
 # --- スライド出力 ---------------------------------------------------------
 SLIDE_FORMAT = os.getenv("SLIDE_FORMAT", "pptx")  # "pptx" or "html"
 
+# --- LINE配信（LINE Messaging API / broadcast） ---------------------------
+LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN", "")
+# LINEのテキストメッセージ上限は5000文字。安全マージンを取って既定4500。
+LINE_MAX_CHARS_PER_MESSAGE = int(os.getenv("LINE_MAX_CHARS_PER_MESSAGE", "4500"))
+
 # --- ディレクトリ ---------------------------------------------------------
 CACHE_DIR = Path(os.getenv("CACHE_DIR", BASE_DIR / "cache"))
 CACHE_SEARCH_DIR = CACHE_DIR / "search"
@@ -76,3 +81,11 @@ def require_youtube_key() -> str:
             "YOUTUBE_API_KEY が設定されていません。.env を作成し設定してください。"
         )
     return YOUTUBE_API_KEY
+
+
+def require_line_token() -> str:
+    if not LINE_CHANNEL_ACCESS_TOKEN:
+        raise ConfigError(
+            "LINE_CHANNEL_ACCESS_TOKEN が設定されていません。.env を設定してください。"
+        )
+    return LINE_CHANNEL_ACCESS_TOKEN
