@@ -9,6 +9,7 @@ import argparse
 import sys
 
 import config
+import quota_tracker
 from combine_deck import combine_summaries
 from config import ConfigError
 from fetch_videos import QuotaExceededError, search_and_collect
@@ -30,10 +31,13 @@ def run_pipeline(
         videos = search_and_collect(queries=queries, max_results=max_results, force=force)
     except QuotaExceededError as e:
         print(f"[main] ERROR: {e}", file=sys.stderr)
+        print(quota_tracker.usage_summary())
         sys.exit(1)
     except ConfigError as e:
         print(f"[main] ERROR: {e}", file=sys.stderr)
         sys.exit(1)
+
+    print(quota_tracker.usage_summary())
 
     if not videos:
         print("[main] 対象動画が見つかりませんでした（再生時間フィルタまたは字幕なし）。")

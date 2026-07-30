@@ -24,6 +24,7 @@ from youtube_transcript_api import (
 )
 
 import config
+import quota_tracker
 
 
 class QuotaExceededError(RuntimeError):
@@ -100,6 +101,7 @@ def search_video_ids(query: str, max_results: int | None = None, force: bool = F
             ) from e
         raise
 
+    quota_tracker.record_usage(quota_tracker.SEARCH_LIST_COST)
     video_ids = [item["id"]["videoId"] for item in response.get("items", [])]
     _save_json_cache(cache_path, {"query": query, "video_ids": video_ids})
     print(f"[fetch_videos] 検索取得: '{query}' -> {len(video_ids)}件")
@@ -135,6 +137,7 @@ def get_video_details(video_ids: list[str], force: bool = False) -> list[VideoIn
                 ) from e
             raise
 
+        quota_tracker.record_usage(quota_tracker.VIDEOS_LIST_COST)
         for item in response.get("items", []):
             snippet = item["snippet"]
             duration = isodate.parse_duration(item["contentDetails"]["duration"])

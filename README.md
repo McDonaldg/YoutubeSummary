@@ -60,12 +60,41 @@ LINE Notifyは廃止されているため、LINE Messaging APIを使用します
 
 broadcast配信（Botの友だち全員に送信）を使っているため、Botを自分だけが友だち追加していれば実質的に個人専用チャネルになります。
 
+## iPhoneからの実行（GitHub Actions）
+
+`.github/workflows/run-pipeline.yml` により、GitHub Actionsの手動実行（`workflow_dispatch`）でパイプラインをクラウド上で動かせます。自分のPCを起動しておく必要はありません。
+
+### 1. GitHub Secretsを登録（初回のみ）
+
+リポジトリの **Settings → Secrets and variables → Actions → Secrets** で以下を登録します。
+
+| Secret名 | 内容 |
+|---|---|
+| `YOUTUBE_API_KEY` | 必須 |
+| `ANTHROPIC_API_KEY` | 任意（未設定なら抽出フォールバックで要約） |
+| `LINE_CHANNEL_ACCESS_TOKEN` | LINE配信する場合は必須 |
+
+検索キーワードを固定で使いたい場合は、同じ画面の **Variables** タブで `YT_QUERIES`（カンマ区切り）を登録しておくと、実行時にキーワード未指定でもそれが使われます。
+
+### 2. iPhoneから実行する
+
+1. GitHubモバイルアプリ、またはSafari等のブラウザで `https://github.com/<owner>/<repo>/actions/workflows/run-pipeline.yml` を開く
+2. 「Run workflow」をタップ
+3. 検索キーワード・件数・スライド形式・LINE配信有無・デッキタイトルを必要に応じて入力し、「Run workflow」を実行
+4. 実行が終わると、Actionsの実行結果画面から生成物（Markdown・スライド）を`youtube-summary-output`というアーティファクトとしてダウンロードできる。LINE配信を有効にしていれば、その場でLINEにも届く
+
+### 補足
+
+- `cache/`は`actions/cache`で実行間を跨いで再利用されるため、同日中の再実行では無駄なAPI呼び出しを避けられる。ただしローカルPCでの実行とはキャッシュ・クォータ集計が別管理になる点に注意。
+- 定期実行（例: 毎週月曜9時）にしたい場合は、ワークフローの`on:`に`schedule: - cron: "0 0 * * 1"`（UTC基準）を追記すれば自動化できる。
+
 ## コスト・利用制限ガードレール
 
 - YouTube検索は1クエリあたり最大10件（既定5件、`YT_MAX_RESULTS`で調整）。
 - 全取得データはキャッシュ利用し、`--force`を指定しない限り再取得しない。
 - YouTube API のクォータ超過（403 quotaExceeded）を検知すると、安全に処理を中断しエラーメッセージを表示する。
 - LLM呼び出しは1動画につき最大1回、出力トークン上限は`LLM_MAX_TOKENS`で固定。
+- YouTube Data API v3のクォータ消費量（`search.list`=100 units、`videos.list`=1 unit、無料枠は1日10,000 units）を`quota_tracker.py`が日次で記録し、`main.py`実行時に「本日の使用量／残り」を表示する。単独で確認する場合は `python3 quota_tracker.py` を実行。Google側の「残クォータ」を直接取得するAPIは無いため、この数値はこちらでの呼び出し回数に基づく概算（太平洋時間0時にリセット）。
 
 ## ディレクトリ構成
 
@@ -76,8 +105,10 @@ summarize_to_md.py      Markdown要約生成
 generate_slides.py      スライド生成（pptx / html）
 combine_deck.py         複数動画要約の統合デッキ生成（NotebookLM手動取り込み用）
 send_line.py            統合デッキのLINE配信
+quota_tracker.py        YouTube APIクォータ使用量の記録・表示
 main.py                 パイプライン実行エントリーポイント
-cache/                  検索結果・動画詳細・字幕のキャッシュ（gitignore対象）
+.github/workflows/      GitHub Actionsワークフロー（iPhone等からの手動実行用）
+cache/                  検索結果・動画詳細・字幕・クォータ使用量のキャッシュ（gitignore対象）
 output/markdown/        構造化Markdown要約・統合デッキ(digest_*.md)
 output/slides/          生成済みスライド
 ```

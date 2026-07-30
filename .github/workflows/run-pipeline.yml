@@ -1,0 +1,86 @@
+name: Run YouTube Summary Pipeline
+
+on:
+  workflow_dispatch:
+    inputs:
+      query:
+        description: "検索キーワード（カンマ区切り、空ならリポジトリ変数 YT_QUERIES を使用）"
+        required: false
+        default: ""
+      max_results:
+        description: "1クエリあたり最大取得件数（1〜10）"
+        required: false
+        default: "5"
+      format:
+        description: "スライド形式"
+        required: false
+        default: "pptx"
+        type: choice
+        options:
+          - pptx
+          - html
+      send_line:
+        description: "統合デッキをLINEへ配信する"
+        required: false
+        default: true
+        type: boolean
+      deck_title:
+        description: "統合デッキのタイトル（空なら自動生成）"
+        required: false
+        default: ""
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Restore cache (search/videos/transcripts/quota)
+        uses: actions/cache@v4
+        with:
+          path: cache
+          key: yt-summary-cache-${{ github.run_id }}
+          restore-keys: |
+            yt-summary-cache-
+
+      - name: Run pipeline
+        env:
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+          YT_QUERIES: ${{ vars.YT_QUERIES }}
+          QUERY_INPUT: ${{ github.event.inputs.query }}
+          MAX_RESULTS_INPUT: ${{ github.event.inputs.max_results }}
+          FORMAT_INPUT: ${{ github.event.inputs.format }}
+          SEND_LINE_INPUT: ${{ github.event.inputs.send_line }}
+          DECK_TITLE_INPUT: ${{ github.event.inputs.deck_title }}
+        run: |
+          ARGS=(--max-results "$MAX_RESULTS_INPUT" --format "$FORMAT_INPUT")
+          if [ -n "$QUERY_INPUT" ]; then
+            IFS=',' read -ra QS <<< "$QUERY_INPUT"
+            for q in "${QS[@]}"; do
+              ARGS+=(--query "$q")
+            done
+          fi
+          if [ "$SEND_LINE_INPUT" = "true" ]; then
+            ARGS+=(--send-line)
+          fi
+          if [ -n "$DECK_TITLE_INPUT" ]; then
+            ARGS+=(--deck-title "$DECK_TITLE_INPUT")
+          fi
+          python main.py "${ARGS[@]}"
+
+      - name: Upload outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: youtube-summary-output
+          path: output/
+          retention-days: 14
