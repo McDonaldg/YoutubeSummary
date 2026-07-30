@@ -14,7 +14,7 @@ from combine_deck import combine_summaries
 from config import ConfigError
 from fetch_videos import QuotaExceededError, search_and_collect
 from generate_slides import generate as generate_slides_for
-from send_line import send_deck
+from send_line import filter_unsent, mark_sent, send_deck
 from summarize_to_md import summarize_video
 
 
@@ -67,21 +67,32 @@ def run_pipeline(
         print(f"  - {r['title']}\n      md: {r['markdown_path']}\n      slide: {r['slide_path']}")
 
     if results:
+        all_video_ids = [r["video_id"] for r in results]
         print("\n=== 5. 統合デッキ生成（NotebookLM取り込み用） ===")
         try:
-            deck_path = combine_summaries(
-                [r["video_id"] for r in results], title=deck_title
-            )
+            deck_path = combine_summaries(all_video_ids, title=deck_title)
         except Exception as e:  # noqa: BLE001
             print(f"[main] 統合デッキ生成失敗: {e}", file=sys.stderr)
             deck_path = None
 
         if deck_path and send_line:
-            print("=== 6. LINE配信 ===")
-            try:
-                send_deck(deck_path)
-            except Exception as e:  # noqa: BLE001
-                print(f"[main] LINE配信失敗: {e}", file=sys.stderr)
+            new_ids = filter_unsent(all_video_ids)
+            if not new_ids:
+                print("[main] 配信対象はすべて配信済みのため、LINE配信をスキップします。")
+            else:
+                print(f"=== 6. LINE配信（新規{len(new_ids)}/{len(all_video_ids)}件） ===")
+                try:
+                    line_deck_path = (
+                        deck_path
+                        if len(new_ids) == len(all_video_ids)
+                        else combine_summaries(
+                            new_ids, title=deck_title, out_name=f"{deck_path.stem}_line"
+                        )
+                    )
+                    send_deck(line_deck_path)
+                    mark_sent(new_ids)
+                except Exception as e:  # noqa: BLE001
+                    print(f"[main] LINE配信失敗: {e}", file=sys.stderr)
 
     return results
 

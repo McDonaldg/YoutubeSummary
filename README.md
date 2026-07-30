@@ -42,11 +42,11 @@ python3 send_line.py --file output/markdown/digest_xxx.md
 
 ## パイプライン構成
 
-1. `fetch_videos.py` — YouTube Data API v3で検索し、再生時間（既定10〜30分）でフィルタ、`youtube-transcript-api`で日本語字幕（無ければ自動生成字幕）を取得。検索結果・動画詳細・字幕はすべて `cache/` にキャッシュし、既存データは再取得しない。
+1. `fetch_videos.py` — YouTube Data API v3で検索し、再生時間（既定10〜30分）でフィルタ、`youtube-transcript-api`で日本語字幕（無ければ自動生成字幕）を取得。検索結果は日付単位でキャッシュするため、同日中の再実行はキャッシュを再利用し、日をまたぐと自動的に新しい検索結果を取得する。動画詳細・字幕は動画IDごとに永続キャッシュし、既存データは再取得しない。
 2. `summarize_to_md.py` — 字幕をClaude API（1動画1回呼び出し、`max_tokens`は`.env`で制御）で「背景・キーポイント・結論」の構造化Markdownに要約し `output/markdown/` に保存。
 3. `generate_slides.py` — 構造化Markdownを見出し単位でスライド化し、`python-pptx`でpptx、または自己完結型HTMLスライド（外部ライブラリ不要、矢印キーで送り操作）を `output/slides/` に生成。
-4. `combine_deck.py` — 今回の実行で処理した全動画の要約を1つの`.md`（`output/markdown/digest_*.md`）に結合。**NotebookLMへはこのファイルを手動でアップロードする運用**を想定（NotebookLMに公開APIが無いため自動投入は非対応）。
-5. `send_line.py` — 統合デッキをLINE Messaging APIのbroadcastでテキスト配信（`--send-line`指定時のみ、既定はスキップ）。
+4. `combine_deck.py` — 今回の実行で処理した全動画の要約を1つの`.md`（`output/markdown/digest_*.md`）に結合。**NotebookLMへはこのファイルを手動でアップロードする運用**を想定（NotebookLMに公開APIが無いため自動投入は非対応）。この統合デッキには実行対象になった動画がすべて含まれる（LINE配信済みかどうかに関わらない）。
+5. `send_line.py` — 統合デッキをLINE Messaging APIのbroadcastでテキスト配信（`--send-line`指定時のみ、既定はスキップ）。**過去にLINE配信済みの動画は`cache/line_sent_video_ids.json`で記録され、以降の実行では自動的に除外**される。検索結果に同じ動画が再び含まれても、LINEには新規分だけが届く（該当日に新規動画が無ければ配信自体をスキップ）。
 
 ## LINE配信のセットアップ（任意）
 

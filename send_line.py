@@ -7,6 +7,7 @@ LINE Notifyは廃止済みのため、LINE Messaging APIのbroadcast（Botを友
 from __future__ import annotations
 
 import argparse
+import json
 import time
 from pathlib import Path
 
@@ -17,6 +18,32 @@ import config
 LINE_BROADCAST_URL = "https://api.line.me/v2/bot/message/broadcast"
 LINE_TEXT_LIMIT = 5000
 _MESSAGES_PER_CALL = 5
+_SENT_HISTORY_PATH = config.CACHE_DIR / "line_sent_video_ids.json"
+
+
+def _load_sent_ids() -> set[str]:
+    if _SENT_HISTORY_PATH.exists():
+        with open(_SENT_HISTORY_PATH, encoding="utf-8") as f:
+            return set(json.load(f))
+    return set()
+
+
+def _save_sent_ids(ids: set[str]) -> None:
+    with open(_SENT_HISTORY_PATH, "w", encoding="utf-8") as f:
+        json.dump(sorted(ids), f, ensure_ascii=False, indent=2)
+
+
+def filter_unsent(video_ids: list[str]) -> list[str]:
+    """過去にLINE配信済みの動画IDを除外する。"""
+    sent = _load_sent_ids()
+    return [v for v in video_ids if v not in sent]
+
+
+def mark_sent(video_ids: list[str]) -> None:
+    """配信済みとして記録する。"""
+    ids = _load_sent_ids()
+    ids.update(video_ids)
+    _save_sent_ids(ids)
 
 
 def markdown_to_line_text(md_text: str) -> str:

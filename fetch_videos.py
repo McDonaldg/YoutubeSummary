@@ -66,11 +66,12 @@ def _youtube_client():
 
 
 def search_video_ids(query: str, max_results: int | None = None, force: bool = False) -> list[str]:
-    """検索クエリに一致する動画IDを取得（キャッシュ利用）。"""
+    """検索クエリに一致する動画IDを取得（キャッシュ利用、日替わりで新しい結果を取得）。"""
     max_results = max_results or config.YT_MAX_RESULTS
     max_results = min(max(max_results, 1), 10)
 
-    key = _cache_key("search", query, str(max_results))
+    today = datetime.now().strftime("%Y-%m-%d")
+    key = _cache_key("search", query, str(max_results), today)
     cache_path = config.CACHE_SEARCH_DIR / f"{key}.json"
 
     if not force:
