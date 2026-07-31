@@ -1,12 +1,11 @@
 """YouTube動画の検索・フィルタリングと字幕取得。
 
-API無料枠を保護するため、検索結果・動画詳細・字幕はすべて cache/ 配下に
-永続化し、同一条件での再取得を避ける。
+検索結果は新着動画を見逃さないよう毎回APIから取得する（キャッシュしない）。
+動画詳細・字幕は動画IDごとに cache/ 配下へ永続化し、同一動画の再取得を避ける。
 """
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import sys
 from dataclasses import asdict, dataclass
@@ -45,10 +44,6 @@ class VideoInfo:
         return asdict(self)
 
 
-def _cache_key(*parts: str) -> str:
-    return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()[:16]
-
-
 def _load_json_cache(path) -> Optional[dict]:
     if path.exists():
         with open(path, encoding="utf-8") as f:
@@ -65,20 +60,10 @@ def _youtube_client():
     return build("youtube", "v3", developerKey=config.require_youtube_key())
 
 
-def search_video_ids(query: str, max_results: int | None = None, force: bool = False) -> list[str]:
-    """検索クエリに一致する動画IDを取得（キャッシュ利用、日替わりで新しい結果を取得）。"""
+def search_video_ids(query: str, max_results: int | None = None) -> list[str]:
+    """検索クエリに一致する動画IDを取得する（実行のたびにAPIへ問い合わせ、新着動画を検知する）。"""
     max_results = max_results or config.YT_MAX_RESULTS
     max_results = min(max(max_results, 1), 10)
-
-    today = datetime.now().strftime("%Y-%m-%d")
-    key = _cache_key("search", query, str(max_results), today)
-    cache_path = config.CACHE_SEARCH_DIR / f"{key}.json"
-
-    if not force:
-        cached = _load_json_cache(cache_path)
-        if cached is not None:
-            print(f"[fetch_videos] キャッシュ利用: search '{query}' ({len(cached['video_ids'])}件)")
-            return cached["video_ids"]
 
     youtube = _youtube_client()
     try:
@@ -104,7 +89,6 @@ def search_video_ids(query: str, max_results: int | None = None, force: bool = F
 
     quota_tracker.record_usage(quota_tracker.SEARCH_LIST_COST)
     video_ids = [item["id"]["videoId"] for item in response.get("items", [])]
-    _save_json_cache(cache_path, {"query": query, "video_ids": video_ids})
     print(f"[fetch_videos] 検索取得: '{query}' -> {len(video_ids)}件")
     return video_ids
 
@@ -207,7 +191,7 @@ def search_and_collect(
     seen_ids: set[str] = set()
 
     for query in queries:
-        video_ids = search_video_ids(query, max_results=max_results, force=force)
+        video_ids = search_video_ids(query, max_results=max_results)
         details = get_video_details(video_ids, force=force)
         filtered = filter_by_duration(details)
         print(

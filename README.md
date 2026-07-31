@@ -42,7 +42,7 @@ python3 send_line.py --file output/markdown/digest_xxx.md
 
 ## パイプライン構成
 
-1. `fetch_videos.py` — YouTube Data API v3で検索し、再生時間（既定10〜30分）でフィルタ、`youtube-transcript-api`で日本語字幕（無ければ自動生成字幕）を取得。検索結果は日付単位でキャッシュするため、同日中の再実行はキャッシュを再利用し、日をまたぐと自動的に新しい検索結果を取得する。動画詳細・字幕は動画IDごとに永続キャッシュし、既存データは再取得しない。
+1. `fetch_videos.py` — YouTube Data API v3で検索し、再生時間（既定10〜30分）でフィルタ、`youtube-transcript-api`で日本語字幕（無ければ自動生成字幕）を取得。**検索は実行のたびに毎回APIへ問い合わせる**（新着動画を逃さないためキャッシュしない。`search.list`は1回100 units）。動画詳細・字幕は動画IDごとに永続キャッシュするため、同じ動画を検索結果で再び見つけても再取得はしない。
 2. `summarize_to_md.py` — 字幕をClaude API（1動画1回呼び出し、`max_tokens`は`.env`で制御）で「背景・キーポイント・結論」の構造化Markdownに要約し `output/markdown/` に保存。
 3. `generate_slides.py` — 構造化Markdownを見出し単位でスライド化し、`python-pptx`でpptx、または自己完結型HTMLスライド（外部ライブラリ不要、矢印キーで送り操作）を `output/slides/` に生成。
 4. `combine_deck.py` — 今回の実行で処理した全動画の要約を1つの`.md`（`output/markdown/digest_*.md`）に結合。**NotebookLMへはこのファイルを手動でアップロードする運用**を想定（NotebookLMに公開APIが無いため自動投入は非対応）。この統合デッキには実行対象になった動画がすべて含まれる（LINE配信済みかどうかに関わらない）。
@@ -90,8 +90,8 @@ broadcast配信（Botの友だち全員に送信）を使っているため、Bo
 
 ## コスト・利用制限ガードレール
 
-- YouTube検索は1クエリあたり最大10件（既定5件、`YT_MAX_RESULTS`で調整）。
-- 全取得データはキャッシュ利用し、`--force`を指定しない限り再取得しない。
+- YouTube検索は1クエリあたり最大10件（既定5件、`YT_MAX_RESULTS`で調整）。検索自体は毎回APIを呼ぶが、`search.list`は1回100 unitsと軽量なので、1日に何度実行しても既定クォータ内で十分収まる。
+- 動画詳細・字幕・要約・スライドは動画IDごとにキャッシュし、`--force`を指定しない限り既存動画の再取得・再生成はしない。
 - YouTube API のクォータ超過（403 quotaExceeded）を検知すると、安全に処理を中断しエラーメッセージを表示する。
 - LLM呼び出しは1動画につき最大1回、出力トークン上限は`LLM_MAX_TOKENS`で固定。
 - YouTube Data API v3のクォータ消費量（`search.list`=100 units、`videos.list`=1 unit、無料枠は1日10,000 units）を`quota_tracker.py`が日次で記録し、`main.py`実行時に「本日の使用量／残り」を表示する。単独で確認する場合は `python3 quota_tracker.py` を実行。Google側の「残クォータ」を直接取得するAPIは無いため、この数値はこちらでの呼び出し回数に基づく概算（太平洋時間0時にリセット）。

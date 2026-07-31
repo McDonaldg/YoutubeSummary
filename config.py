@@ -53,7 +53,6 @@ LINE_MAX_CHARS_PER_MESSAGE = int(os.getenv("LINE_MAX_CHARS_PER_MESSAGE", "4500")
 
 # --- ディレクトリ ---------------------------------------------------------
 CACHE_DIR = Path(os.getenv("CACHE_DIR", BASE_DIR / "cache"))
-CACHE_SEARCH_DIR = CACHE_DIR / "search"
 CACHE_VIDEOS_DIR = CACHE_DIR / "videos"
 CACHE_TRANSCRIPTS_DIR = CACHE_DIR / "transcripts"
 
@@ -62,7 +61,6 @@ OUTPUT_MARKDOWN_DIR = OUTPUT_DIR / "markdown"
 OUTPUT_SLIDES_DIR = OUTPUT_DIR / "slides"
 
 for _d in (
-    CACHE_SEARCH_DIR,
     CACHE_VIDEOS_DIR,
     CACHE_TRANSCRIPTS_DIR,
     OUTPUT_MARKDOWN_DIR,
